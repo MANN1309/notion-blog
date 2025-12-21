@@ -7,6 +7,7 @@ const postsDirectory = path.join(process.cwd(), 'content', 'posts');
 
 // 포스트 메타데이터 타입
 export interface PostMeta {
+  id: string;
   title: string;
   slug: string;
   date: string;
