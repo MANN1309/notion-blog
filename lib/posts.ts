@@ -34,7 +34,7 @@ export async function getPosts(): Promise<PostMeta[]> {
     }
 
     const fileNames = fs.readdirSync(postsDirectory);
-    const allPostsData = fileNames
+    const allPostsData: PostMeta[] = fileNames
       .filter((fileName) => fileName.endsWith('.md'))
       .map((fileName) => {
         const fullPath = path.join(postsDirectory, fileName);
@@ -66,7 +66,7 @@ export async function getPosts(): Promise<PostMeta[]> {
           tags: data.tags || [],
           thumbnail: data.thumbnail || null,
           excerpt: excerpt || null,
-        };
+        } as PostMeta;
       })
       .filter((post): post is PostMeta => post !== null)
       .sort((a, b) => {
