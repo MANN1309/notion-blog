@@ -1,5 +1,6 @@
 import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
+import { getCachedPosts, getCachedPost } from './cache';
 
 // Notion 클라이언트 초기화
 export const notion = new Client({
@@ -67,8 +68,8 @@ async function extractFirstImageAndText(pageId: string): Promise<{ thumbnail: st
   }
 }
 
-// 데이터베이스에서 모든 포스트 가져오기
-export async function getPosts() {
+// Notion API에서 직접 포스트 가져오기 (캐시 무시)
+async function fetchPostsFromNotion() {
   try {
     // @notionhq/client 5.6.0에는 databases.query가 없으므로 직접 HTTP 요청 사용
     const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
@@ -128,9 +129,28 @@ export async function getPosts() {
 
     return postsWithContent;
   } catch (error) {
-    console.error('Error fetching posts:', error);
+    console.error('Error fetching posts from Notion:', error);
     return [];
   }
+}
+
+// 데이터베이스에서 모든 포스트 가져오기 (캐시만 사용, Notion API 호출 안 함)
+export async function getPosts() {
+  // 캐시에서만 읽기
+  const cachedPosts = getCachedPosts();
+  if (cachedPosts && cachedPosts.length > 0) {
+    console.log('Using cached posts');
+    return cachedPosts;
+  }
+
+  // 캐시가 없으면 빈 배열 반환 (Notion API 호출 안 함)
+  console.log('Cache not found, returning empty array. Please sync from Notion button.');
+  return [];
+}
+
+// Notion API에서 직접 가져오기 (동기화용)
+export async function getPostsFromNotion() {
+  return await fetchPostsFromNotion();
 }
 
 // 특정 포스트 가져오기
@@ -161,62 +181,16 @@ export async function getPostById(pageId: string) {
   }
 }
 
-// Slug로 포스트 찾기
+// Slug로 포스트 찾기 (캐시만 사용, Notion API 호출 안 함)
 export async function getPostBySlug(slug: string) {
-  try {
-    // Slug가 페이지 ID 형식인지 확인 (Notion 페이지 ID는 32자리 하이픈 포함 UUID)
-    const isPageId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-
-    // 페이지 ID인 경우 직접 조회
-    if (isPageId) {
-      try {
-        return await getPostById(slug);
-      } catch (error) {
-        // 페이지 ID로 찾지 못한 경우 계속 진행
-        console.log('Page ID lookup failed, trying slug search');
-      }
-    }
-
-    // Slug 속성으로 찾기
-    const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.NOTION_API_KEY}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        filter: {
-          property: 'Slug',
-          rich_text: {
-            equals: slug,
-          },
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Notion API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.results.length === 0) {
-      // Slug로 찾지 못했을 경우, 모든 공개 포스트에서 slug가 일치하는지 확인
-      const allPosts = await getPosts();
-      const foundPost = allPosts.find((post: any) => post.slug === slug);
-      
-      if (foundPost) {
-        return await getPostById(foundPost.id);
-      }
-      
-      return null;
-    }
-
-    const page = data.results[0];
-    return await getPostById(page.id);
-  } catch (error) {
-    console.error('Error fetching post by slug:', error);
-    return null;
+  // 캐시에서만 읽기
+  const cachedPost = getCachedPost(slug);
+  if (cachedPost) {
+    console.log(`Using cached post: ${slug}`);
+    return cachedPost;
   }
+
+  // 캐시가 없으면 null 반환 (Notion API 호출 안 함)
+  console.log(`Cache not found for ${slug}, returning null. Please sync from Notion button.`);
+  return null;
 }

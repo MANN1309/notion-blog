@@ -12,7 +12,7 @@ export default function ProfileSidebar() {
             <h3 className="font-semibold text-theme-primary mb-1">WooSM</h3>
             <p className="text-sm text-theme-secondary mb-2">일상 블로그</p>
             <p className="text-sm text-theme-secondary">
-              I develop everything using node.
+              나의 내면 일기장.
             </p>
           </div>
         </div>
