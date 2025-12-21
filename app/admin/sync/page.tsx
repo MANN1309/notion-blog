@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { syncNotionData } from './actions';
 
 export default function SyncPage() {
   const [loading, setLoading] = useState(false);
@@ -15,16 +16,10 @@ export default function SyncPage() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // 서버 액션을 통해 동기화 (서버에서 직접 처리, 토큰 불필요)
+      const data = await syncNotionData();
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      if (data.success) {
         setResult({
           success: true,
           message: data.message,
@@ -33,7 +28,7 @@ export default function SyncPage() {
       } else {
         setResult({
           success: false,
-          message: data.error || '동기화 실패',
+          message: data.message || '동기화 실패',
         });
       }
     } catch (error) {
