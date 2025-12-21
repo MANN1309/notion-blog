@@ -1,6 +1,5 @@
 import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
-import { getCachedPosts, getCachedPost } from './cache';
 
 // Notion 클라이언트 초기화
 export const notion = new Client({
@@ -68,7 +67,7 @@ async function extractFirstImageAndText(pageId: string): Promise<{ thumbnail: st
   }
 }
 
-// Notion API에서 직접 포스트 가져오기 (캐시 무시)
+// 데이터베이스에서 모든 포스트 가져오기
 async function fetchPostsFromNotion() {
   try {
     // @notionhq/client 5.6.0에는 databases.query가 없으므로 직접 HTTP 요청 사용
@@ -134,22 +133,8 @@ async function fetchPostsFromNotion() {
   }
 }
 
-// 데이터베이스에서 모든 포스트 가져오기 (캐시만 사용, Notion API 호출 안 함)
+// 데이터베이스에서 모든 포스트 가져오기
 export async function getPosts() {
-  // 캐시에서만 읽기
-  const cachedPosts = getCachedPosts();
-  if (cachedPosts && cachedPosts.length > 0) {
-    console.log('Using cached posts');
-    return cachedPosts;
-  }
-
-  // 캐시가 없으면 빈 배열 반환 (Notion API 호출 안 함)
-  console.log('Cache not found, returning empty array. Please sync from Notion button.');
-  return [];
-}
-
-// Notion API에서 직접 가져오기 (동기화용)
-export async function getPostsFromNotion() {
   return await fetchPostsFromNotion();
 }
 
@@ -181,16 +166,16 @@ export async function getPostById(pageId: string) {
   }
 }
 
-// Slug로 포스트 찾기 (캐시만 사용, Notion API 호출 안 함)
+// Slug로 포스트 찾기
 export async function getPostBySlug(slug: string) {
-  // 캐시에서만 읽기
-  const cachedPost = getCachedPost(slug);
-  if (cachedPost) {
-    console.log(`Using cached post: ${slug}`);
-    return cachedPost;
+  const posts = await getPosts();
+  const post = posts.find((p: any) => p.slug === slug);
+  
+  if (!post) {
+    return null;
   }
 
-  // 캐시가 없으면 null 반환 (Notion API 호출 안 함)
-  console.log(`Cache not found for ${slug}, returning null. Please sync from Notion button.`);
-  return null;
+  // 상세 내용 가져오기
+  const postDetail = await getPostById(post.id);
+  return postDetail;
 }
