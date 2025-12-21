@@ -9,9 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@notionhq/client": "^5.6.0",
+    "gray-matter": "^4.0.3",
     "next": "16.0.10",
+    "notion-to-md": "^3.1.9",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
