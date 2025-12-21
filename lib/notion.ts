@@ -166,10 +166,12 @@ export async function getPostById(pageId: string) {
   }
 }
 
-// Slug로 포스트 찾기 (최적화: 전체 목록을 가져오지 않고 직접 검색)
+// Slug로 포스트 찾기
 export async function getPostBySlug(slug: string) {
   try {
-    // 전체 목록을 가져오지 않고, 데이터베이스에서 직접 검색
+    console.log(`[getPostBySlug] Searching for slug: ${slug}`);
+    
+    // 먼저 Slug 속성으로 검색 시도
     const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
       method: 'POST',
       headers: {
@@ -197,19 +199,48 @@ export async function getPostBySlug(slug: string) {
       }),
     });
 
-    if (!response.ok) {
-      return null;
+    if (response.ok) {
+      const data = await response.json();
+      if (data.results.length > 0) {
+        console.log(`[getPostBySlug] Found by Slug property: ${slug}`);
+        const page = data.results[0];
+        return await getPostById(page.id);
+      }
+    } else {
+      console.log(`[getPostBySlug] Slug property search failed: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
-    if (data.results.length === 0) {
-      return null;
+    // Slug 속성으로 찾지 못한 경우, 전체 목록에서 찾기 (fallback)
+    // slug가 page.id인 경우를 처리하기 위해
+    console.log(`[getPostBySlug] Trying fallback: searching in all posts`);
+    const allPosts = await getPosts();
+    console.log(`[getPostBySlug] Total posts: ${allPosts.length}`);
+    const post = allPosts.find((p: any) => p.slug === slug);
+    
+    if (post) {
+      console.log(`[getPostBySlug] Found in all posts: ${slug} -> ${post.id}`);
+      return await getPostById(post.id);
     }
 
-    const page = data.results[0];
-    return await getPostById(page.id);
+    // 여전히 찾지 못한 경우, slug가 직접 page.id인지 확인
+    // Notion page ID는 32자리 hex 문자열
+    if (slug.length === 32 && /^[a-f0-9-]+$/i.test(slug.replace(/-/g, ''))) {
+      console.log(`[getPostBySlug] Trying as page ID: ${slug}`);
+      try {
+        const postById = await getPostById(slug);
+        if (postById) {
+          console.log(`[getPostBySlug] Found by page ID: ${slug}`);
+          return postById;
+        }
+      } catch (error) {
+        console.log(`[getPostBySlug] Page ID lookup failed: ${error}`);
+      }
+    }
+
+    console.log(`[getPostBySlug] Not found: ${slug}`);
+    return null;
   } catch (error) {
-    console.error('Error fetching post by slug:', error);
+    console.error('[getPostBySlug] Error fetching post by slug:', error);
     return null;
   }
 }
