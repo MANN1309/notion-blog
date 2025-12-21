@@ -21,6 +21,9 @@ interface HomeProps {
   searchParams: Promise<{ tag?: string; search?: string }>;
 }
 
+// 자동 재검증 비활성화 (수동으로만 재검증)
+export const revalidate = false;
+
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const allPosts = await getPosts();

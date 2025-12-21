@@ -166,16 +166,50 @@ export async function getPostById(pageId: string) {
   }
 }
 
-// Slug로 포스트 찾기
+// Slug로 포스트 찾기 (최적화: 전체 목록을 가져오지 않고 직접 검색)
 export async function getPostBySlug(slug: string) {
-  const posts = await getPosts();
-  const post = posts.find((p: any) => p.slug === slug);
-  
-  if (!post) {
+  try {
+    // 전체 목록을 가져오지 않고, 데이터베이스에서 직접 검색
+    const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.NOTION_API_KEY}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filter: {
+          and: [
+            {
+              property: '공개',
+              checkbox: {
+                equals: true,
+              },
+            },
+            {
+              property: 'Slug',
+              rich_text: {
+                equals: slug,
+              },
+            },
+          ],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.results.length === 0) {
+      return null;
+    }
+
+    const page = data.results[0];
+    return await getPostById(page.id);
+  } catch (error) {
+    console.error('Error fetching post by slug:', error);
     return null;
   }
-
-  // 상세 내용 가져오기
-  const postDetail = await getPostById(post.id);
-  return postDetail;
 }

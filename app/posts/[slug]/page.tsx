@@ -17,6 +17,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Giscus from '@/app/components/Giscus';
 
+// 자동 재검증 비활성화 (수동으로만 재검증)
+export const revalidate = false;
+
 export default async function PostPage({
   params,
 }: {
