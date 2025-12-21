@@ -34,7 +34,7 @@ export async function getPosts(): Promise<PostMeta[]> {
     }
 
     const fileNames = fs.readdirSync(postsDirectory);
-    const allPostsData: PostMeta[] = fileNames
+    const postsWithNulls: (PostMeta | null)[] = fileNames
       .filter((fileName) => fileName.endsWith('.md'))
       .map((fileName) => {
         const fullPath = path.join(postsDirectory, fileName);
@@ -67,7 +67,9 @@ export async function getPosts(): Promise<PostMeta[]> {
           thumbnail: data.thumbnail || null,
           excerpt: excerpt || null,
         } as PostMeta;
-      })
+      });
+    
+    const allPostsData: PostMeta[] = postsWithNulls
       .filter((post): post is PostMeta => post !== null)
       .sort((a, b) => {
         // 날짜 기준 내림차순 정렬
