@@ -31,11 +31,16 @@ export default function RevalidatePage() {
       const data = await response.json();
       
       if (response.ok) {
-        setResult(`✅ 성공: ${data.message}`);
-        // 2초 후 메인 페이지로 이동
+        let message = `✅ 성공: ${data.message}`;
+        if (data.sync?.stats) {
+          const stats = data.sync.stats;
+          message += `\n\n📊 동기화 결과:\n- 생성: ${stats.created}개\n- 업데이트: ${stats.updated}개\n- 변경 없음: ${stats.skipped}개\n- 삭제: ${stats.deleted}개`;
+        }
+        setResult(message);
+        // 3초 후 메인 페이지로 이동
         setTimeout(() => {
           window.location.href = '/';
-        }, 2000);
+        }, 3000);
       } else {
         setResult(`❌ 실패: ${data.error || '알 수 없는 오류'}`);
       }

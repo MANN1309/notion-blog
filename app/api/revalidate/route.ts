@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
 
 export async function POST(request: NextRequest) {
   try {
     // API 키 검증 (선택사항)
     const authHeader = request.headers.get('authorization');
     const urlToken = request.nextUrl.searchParams.get('token');
-    const expectedToken = process.env.REVALIDATE_TOKEN;
+    const expectedToken = process.env.REVALIDATE_TOKEN || process.env.SYNC_TOKEN;
     
     if (expectedToken) {
       const token = authHeader?.replace('Bearer ', '') || urlToken;
@@ -15,13 +14,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 모든 경로 재검증
-    revalidatePath('/');
-    revalidatePath('/posts', 'page');
+    // /api/sync를 호출하여 Notion 데이터를 정적 파일로 동기화
+    const baseUrl = request.nextUrl.origin;
+    const syncUrl = `${baseUrl}/api/sync${urlToken ? `?token=${urlToken}` : ''}`;
+    
+    const syncResponse = await fetch(syncUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { 'Authorization': authHeader } : {}),
+      },
+    });
+
+    const syncData = await syncResponse.json();
+
+    if (!syncResponse.ok) {
+      return NextResponse.json(
+        { error: 'Sync failed', details: syncData },
+        { status: syncResponse.status }
+      );
+    }
     
     return NextResponse.json({ 
       revalidated: true, 
-      message: 'Cache revalidated successfully',
+      message: 'Notion data synced and cache revalidated',
+      sync: syncData,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

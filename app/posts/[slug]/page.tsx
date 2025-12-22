@@ -1,24 +1,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-// Notion 또는 Git 기반 포스트 사용 (환경 변수로 선택 가능)
-import { getPostBySlug as getNotionPostBySlug } from '@/lib/notion';
-import { getPostBySlug as getGitPostBySlug } from '@/lib/posts';
-
-// 환경 변수로 데이터 소스 선택 (기본값: Notion)
-const USE_GIT_POSTS = process.env.USE_GIT_POSTS === 'true';
-
-async function getPostBySlug(slug: string) {
-  if (USE_GIT_POSTS) {
-    return getGitPostBySlug(slug);
-  }
-  return getNotionPostBySlug(slug);
-}
+// 정적 파일에서 포스트 읽기 (Notion 동기화 후 생성된 파일)
+import { getPostBySlug } from '@/lib/posts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Giscus from '@/app/components/Giscus';
 
-// 자동 재검증 비활성화 (수동으로만 재검증)
-export const revalidate = false;
+// 정적 생성 (빌드 타임에 생성, 수동 재검증으로 갱신)
+export const dynamic = 'force-static';
+export const dynamicParams = false; // 없는 slug는 404
 
 export default async function PostPage({
   params,
@@ -60,7 +50,7 @@ export default async function PostPage({
                   {post.category}
                 </span>
               )}
-              {post.tags.length > 0 && (
+              {post.tags && post.tags.length > 0 && (
                 <div className="flex gap-2">
                   {post.tags.map((tag: string) => (
                     <span

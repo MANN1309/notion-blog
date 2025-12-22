@@ -67,8 +67,8 @@ async function extractFirstImageAndText(pageId: string): Promise<{ thumbnail: st
   }
 }
 
-// 데이터베이스에서 모든 포스트 가져오기
-async function fetchPostsFromNotion() {
+// 데이터베이스에서 모든 포스트 가져오기 (동기화용)
+export async function fetchPostsFromNotion() {
   try {
     // @notionhq/client 5.6.0에는 databases.query가 없으므로 직접 HTTP 요청 사용
     const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
@@ -100,7 +100,8 @@ async function fetchPostsFromNotion() {
 
     const data = await response.json();
 
-    // 각 포스트에 대해 이미지와 텍스트 추출 (병렬 처리)
+    // 성능 최적화: 이미지와 excerpt는 속성에서 먼저 가져오고, 없으면 블록에서 추출
+    // 속성에 Excerpt가 있으면 블록 API 호출을 건너뛰어 성능 향상
     const postsWithContent = await Promise.all(
       data.results.map(async (page: any) => {
         const properties = page.properties;
@@ -110,8 +111,25 @@ async function fetchPostsFromNotion() {
                       (page.properties && Object.values(page.properties).find((p: any) => p.type === 'title') as any)?.title?.[0]?.plain_text ||
                       '제목 없음';
         
-        // 본문에서 첫 번째 이미지와 텍스트 추출
-        const { thumbnail, excerpt } = await extractFirstImageAndText(page.id);
+        // 속성에서 excerpt 가져오기 (있으면 블록 API 호출 생략)
+        const excerptFromProperty = properties.Excerpt?.rich_text?.[0]?.plain_text || null;
+        
+        // Thumbnail 속성이 있는지 확인
+        const thumbnailFromProperty = properties.Thumbnail?.url || 
+                                      properties.thumbnail?.url || 
+                                      properties.Thumbnail?.files?.[0]?.file?.url ||
+                                      properties.thumbnail?.files?.[0]?.file?.url ||
+                                      null;
+        
+        let thumbnail = thumbnailFromProperty;
+        let excerpt = excerptFromProperty;
+        
+        // 속성에 excerpt나 thumbnail이 없을 때만 블록에서 추출 (성능 최적화)
+        if (!excerpt || !thumbnail) {
+          const { thumbnail: extractedThumbnail, excerpt: extractedExcerpt } = await extractFirstImageAndText(page.id);
+          if (!thumbnail) thumbnail = extractedThumbnail;
+          if (!excerpt) excerpt = extractedExcerpt;
+        }
         
         return {
           id: page.id,
@@ -121,7 +139,7 @@ async function fetchPostsFromNotion() {
           category: properties.카테고리?.select?.name || properties.카테고리?.multi_select?.[0]?.name || null,
           tags: properties.태그?.multi_select?.map((tag: any) => tag.name) || [],
           thumbnail: thumbnail,
-          excerpt: excerpt || properties.Excerpt?.rich_text?.[0]?.plain_text || null,
+          excerpt: excerpt || null,
         };
       })
     );
@@ -133,9 +151,25 @@ async function fetchPostsFromNotion() {
   }
 }
 
+// 메모리 캐시 (서버 재시작 시 초기화됨)
+let postsCache: any[] | null = null;
+let postsCacheTime: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5분
+
 // 데이터베이스에서 모든 포스트 가져오기
 export async function getPosts() {
-  return await fetchPostsFromNotion();
+  // 메모리 캐시 확인 (5분간 유효)
+  const now = Date.now();
+  if (postsCache && (now - postsCacheTime) < CACHE_DURATION) {
+    console.log('[getPosts] Using memory cache');
+    return postsCache;
+  }
+  
+  console.log('[getPosts] Fetching from Notion API');
+  const posts = await fetchPostsFromNotion();
+  postsCache = posts;
+  postsCacheTime = now;
+  return posts;
 }
 
 // 특정 포스트 가져오기
@@ -212,6 +246,7 @@ export async function getPostBySlug(slug: string) {
 
     // Slug 속성으로 찾지 못한 경우, 전체 목록에서 찾기 (fallback)
     // slug가 page.id인 경우를 처리하기 위해
+    // 캐시된 목록 사용 (이미 getPosts()가 캐시를 사용함)
     console.log(`[getPostBySlug] Trying fallback: searching in all posts`);
     const allPosts = await getPosts();
     console.log(`[getPostBySlug] Total posts: ${allPosts.length}`);

@@ -1,17 +1,6 @@
 import { Suspense } from 'react';
-// Notion 또는 Git 기반 포스트 사용 (환경 변수로 선택 가능)
-import { getPosts as getNotionPosts } from '@/lib/notion';
-import { getPosts as getGitPosts } from '@/lib/posts';
-
-// 환경 변수로 데이터 소스 선택 (기본값: Notion)
-const USE_GIT_POSTS = process.env.USE_GIT_POSTS === 'true';
-
-async function getPosts() {
-  if (USE_GIT_POSTS) {
-    return getGitPosts();
-  }
-  return getNotionPosts();
-}
+// 정적 파일에서 포스트 읽기 (Notion 동기화 후 생성된 파일)
+import { getPosts } from '@/lib/posts';
 import TagsSidebar from './components/TagsSidebar';
 import ProfileSidebar from './components/ProfileSidebar';
 import SearchBar from './components/SearchBar';
@@ -21,8 +10,8 @@ interface HomeProps {
   searchParams: Promise<{ tag?: string; search?: string }>;
 }
 
-// 자동 재검증 비활성화 (수동으로만 재검증)
-export const revalidate = false;
+// 정적 생성 (빌드 타임에 생성, 수동 재검증으로 갱신)
+export const dynamic = 'force-static';
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
