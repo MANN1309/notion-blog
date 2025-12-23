@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-// 정적 파일에서 포스트 읽기 (Notion 동기화 후 생성된 파일)
-import { getPostBySlug } from '@/lib/posts';
+// 메모리 캐시에서 포스트 읽기 (Notion 동기화 후 저장된 캐시)
+import { getPostBySlug } from '@/lib/notion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Giscus from '@/app/components/Giscus';

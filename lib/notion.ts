@@ -152,24 +152,33 @@ export async function fetchPostsFromNotion() {
 }
 
 // 메모리 캐시 (서버 재시작 시 초기화됨)
+// 만료시간 없음 - 수동 갱신만 가능
 let postsCache: any[] | null = null;
-let postsCacheTime: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5분
+let postsDetailCache: Map<string, any> = new Map();
+
+// 캐시 업데이트 함수 (동기화 시에만 호출)
+export function updatePostsCache(posts: any[]) {
+  postsCache = posts;
+  console.log(`[cache] Updated posts cache: ${posts.length} posts`);
+}
+
+export function updatePostDetailCache(slug: string, post: any) {
+  postsDetailCache.set(slug, post);
+  console.log(`[cache] Updated post detail cache: ${slug}`);
+}
 
 // 데이터베이스에서 모든 포스트 가져오기
+// 만료시간 없음 - 캐시가 있으면 반환, 없으면 빈 배열 (Notion API 호출 안 함)
 export async function getPosts() {
-  // 메모리 캐시 확인 (5분간 유효)
-  const now = Date.now();
-  if (postsCache && (now - postsCacheTime) < CACHE_DURATION) {
+  if (postsCache) {
     console.log('[getPosts] Using memory cache');
     return postsCache;
   }
   
-  console.log('[getPosts] Fetching from Notion API');
-  const posts = await fetchPostsFromNotion();
-  postsCache = posts;
-  postsCacheTime = now;
-  return posts;
+  // 캐시가 없으면 빈 배열 반환 (Notion API 호출 안 함)
+  // /revalidate 호출 시에만 캐시가 채워짐
+  console.log('[getPosts] Cache empty, returning empty array. Please sync via /revalidate');
+  return [];
 }
 
 // 특정 포스트 가져오기
@@ -200,79 +209,30 @@ export async function getPostById(pageId: string) {
   }
 }
 
-// Slug로 포스트 찾기
+// Slug로 포스트 찾기 (캐시에서만 읽기, Notion API 호출 안 함)
 export async function getPostBySlug(slug: string) {
   try {
     console.log(`[getPostBySlug] Searching for slug: ${slug}`);
     
-    // 먼저 Slug 속성으로 검색 시도
-    const response = await fetch(`https://api.notion.com/v1/databases/${NOTION_DATABASE_ID}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.NOTION_API_KEY}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        filter: {
-          and: [
-            {
-              property: '공개',
-              checkbox: {
-                equals: true,
-              },
-            },
-            {
-              property: 'Slug',
-              rich_text: {
-                equals: slug,
-              },
-            },
-          ],
-        },
-      }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.results.length > 0) {
-        console.log(`[getPostBySlug] Found by Slug property: ${slug}`);
-        const page = data.results[0];
-        return await getPostById(page.id);
-      }
-    } else {
-      console.log(`[getPostBySlug] Slug property search failed: ${response.status} ${response.statusText}`);
+    // 1. 상세 캐시에서 먼저 찾기
+    if (postsDetailCache.has(slug)) {
+      console.log(`[getPostBySlug] Found in detail cache: ${slug}`);
+      return postsDetailCache.get(slug);
     }
-
-    // Slug 속성으로 찾지 못한 경우, 전체 목록에서 찾기 (fallback)
-    // slug가 page.id인 경우를 처리하기 위해
-    // 캐시된 목록 사용 (이미 getPosts()가 캐시를 사용함)
-    console.log(`[getPostBySlug] Trying fallback: searching in all posts`);
+    
+    // 2. 전체 목록 캐시에서 찾기
     const allPosts = await getPosts();
-    console.log(`[getPostBySlug] Total posts: ${allPosts.length}`);
     const post = allPosts.find((p: any) => p.slug === slug);
     
     if (post) {
-      console.log(`[getPostBySlug] Found in all posts: ${slug} -> ${post.id}`);
-      return await getPostById(post.id);
+      console.log(`[getPostBySlug] Found in posts cache: ${slug}`);
+      // 상세 내용이 필요하면 getPostById 호출 (이것도 캐시에 저장됨)
+      // 하지만 이미 상세 캐시에 없으므로 null 반환
+      // 동기화 시에 상세 내용도 함께 저장되어야 함
+      return null;
     }
 
-    // 여전히 찾지 못한 경우, slug가 직접 page.id인지 확인
-    // Notion page ID는 32자리 hex 문자열
-    if (slug.length === 32 && /^[a-f0-9-]+$/i.test(slug.replace(/-/g, ''))) {
-      console.log(`[getPostBySlug] Trying as page ID: ${slug}`);
-      try {
-        const postById = await getPostById(slug);
-        if (postById) {
-          console.log(`[getPostBySlug] Found by page ID: ${slug}`);
-          return postById;
-        }
-      } catch (error) {
-        console.log(`[getPostBySlug] Page ID lookup failed: ${error}`);
-      }
-    }
-
-    console.log(`[getPostBySlug] Not found: ${slug}`);
+    console.log(`[getPostBySlug] Not found in cache: ${slug}. Please sync via /revalidate`);
     return null;
   } catch (error) {
     console.error('[getPostBySlug] Error fetching post by slug:', error);

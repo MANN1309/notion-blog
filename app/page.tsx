@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-// 정적 파일에서 포스트 읽기 (Notion 동기화 후 생성된 파일)
-import { getPosts } from '@/lib/posts';
+// 메모리 캐시에서 포스트 읽기 (Notion 동기화 후 저장된 캐시)
+import { getPosts } from '@/lib/notion';
 import TagsSidebar from './components/TagsSidebar';
 import ProfileSidebar from './components/ProfileSidebar';
 import SearchBar from './components/SearchBar';
