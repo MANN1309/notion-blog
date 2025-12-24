@@ -14,37 +14,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // /api/sync를 호출하여 Notion 데이터를 정적 파일로 동기화
-    const baseUrl = request.nextUrl.origin;
-    const syncUrl = `${baseUrl}/api/sync${urlToken ? `?token=${urlToken}` : ''}`;
-    
-    const syncResponse = await fetch(syncUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authHeader ? { 'Authorization': authHeader } : {}),
-      },
-    });
-
-    const syncData = await syncResponse.json();
-
-    if (!syncResponse.ok) {
+    // GitHub Actions를 트리거하기 위한 repository_dispatch 호출
+    const ghToken = process.env.GH_TOKEN;
+    if (!ghToken) {
       return NextResponse.json(
-        { error: 'Sync failed', details: syncData },
-        { status: syncResponse.status }
+        { error: 'GH_TOKEN not configured' },
+        { status: 500 }
       );
     }
+
+    // 리포지토리 정보 (환경변수로 설정 가능, 기본값: MANN1309/notion-blog)
+    const repoOwner = process.env.GITHUB_REPO_OWNER || 'MANN1309';
+    const repoName = process.env.GITHUB_REPO_NAME || 'notion-blog';
+    const dispatchUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`;
+
+    console.log('[revalidate] Triggering GitHub Actions workflow...');
+    
+    const dispatchResponse = await fetch(dispatchUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ghToken}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event_type: 'notion-sync',
+      }),
+    });
+
+    if (!dispatchResponse.ok) {
+      const errorData = await dispatchResponse.json().catch(() => ({ message: dispatchResponse.statusText }));
+      console.error('[revalidate] GitHub dispatch failed:', errorData);
+      return NextResponse.json(
+        { 
+          error: 'Failed to trigger GitHub Actions',
+          details: errorData,
+          status: dispatchResponse.status
+        },
+        { status: dispatchResponse.status }
+      );
+    }
+
+    const dispatchData = await dispatchResponse.json().catch(() => ({}));
     
     return NextResponse.json({ 
       revalidated: true, 
-      message: 'Notion data synced and cache revalidated',
-      sync: syncData,
+      message: 'GitHub Actions workflow triggered successfully. Posts will be synced and deployed in 1-2 minutes.',
+      dispatch: dispatchData,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error revalidating:', error);
+    console.error('[revalidate] Error:', error);
     return NextResponse.json(
-      { error: 'Error revalidating', message: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Error triggering workflow', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
