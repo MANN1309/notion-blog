@@ -16,9 +16,12 @@ button:disabled{background:#ccc;cursor:not-allowed}
 <div id="msg" class="msg"></div>
 <script>
 (function(){
-var b=document.getElementById('btn'),m=document.getElementById('msg'),u=window.location.origin+'/api/revalidate';
-b.onclick=function(){
-b.disabled=true;m.textContent='요청 중...';m.className='msg';
+var b=document.getElementById('btn'),m=document.getElementById('msg');
+// ⚠️ 아래에 실제 블로그 도메인을 입력하세요 (예: 'https://your-blog.vercel.app')
+var BLOG_URL='https://woosm-blog.vercel.app';
+var baseUrl=BLOG_URL||(window.location.origin||window.location.protocol+'//'+window.location.host);
+var u=baseUrl+'/api/revalidate';
+var triedGet=false;
 function sendReq(method){
 var x=new XMLHttpRequest();
 x.open(method,u,true);
@@ -26,21 +29,21 @@ if(method==='POST'){x.setRequestHeader('Content-Type','application/json')}
 x.onload=function(){
 b.disabled=false;
 var ct=x.getResponseHeader('Content-Type')||'';
+if(x.status===405&&method==='POST'&&!triedGet){triedGet=true;sendReq('GET');return}
 if(!ct.includes('application/json')&&x.responseText.trim().startsWith('<')){m.textContent='❌ 서버 오류 (상태: '+x.status+')';m.className='msg error';return}
 try{
 var r=JSON.parse(x.responseText);
-if(x.status===200&&r.revalidated){m.textContent='✅ '+r.message;m.className='msg success'}else{m.textContent='❌ '+(r.error||'실패');m.className='msg error'}
+if(x.status===200&&r.revalidated){m.textContent='✅ '+r.message;m.className='msg success'}else{m.textContent='❌ '+(r.error||'실패 (상태: '+x.status+')');m.className='msg error'}
 }catch(e){m.textContent='❌ 파싱 오류: '+e.message;m.className='msg error'}
 };
 x.onerror=function(){b.disabled=false;m.textContent='❌ 네트워크 오류';m.className='msg error'};
-x.onreadystatechange=function(){
-if(x.readyState===4&&x.status===405&&method==='POST'){sendReq('GET');return}
-};
 x.timeout=30000;
 x.ontimeout=function(){b.disabled=false;m.textContent='⏱️ 시간 초과';m.className='msg error'};
 x.send(method==='POST'?null:'');
 }
-sendReq('POST');
+b.onclick=function(){
+b.disabled=true;m.textContent='요청 중...';m.className='msg';triedGet=false;
+sendReq('GET');
 };
 })();
 </script>
