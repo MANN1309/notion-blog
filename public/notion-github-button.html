@@ -19,9 +19,10 @@ button:disabled{background:#ccc;cursor:not-allowed}
 var b=document.getElementById('btn'),m=document.getElementById('msg'),u=window.location.origin+'/api/revalidate';
 b.onclick=function(){
 b.disabled=true;m.textContent='요청 중...';m.className='msg';
+function sendReq(method){
 var x=new XMLHttpRequest();
-x.open('POST',u,true);
-x.setRequestHeader('Content-Type','application/json');
+x.open(method,u,true);
+if(method==='POST'){x.setRequestHeader('Content-Type','application/json')}
 x.onload=function(){
 b.disabled=false;
 var ct=x.getResponseHeader('Content-Type')||'';
@@ -32,9 +33,14 @@ if(x.status===200&&r.revalidated){m.textContent='✅ '+r.message;m.className='ms
 }catch(e){m.textContent='❌ 파싱 오류: '+e.message;m.className='msg error'}
 };
 x.onerror=function(){b.disabled=false;m.textContent='❌ 네트워크 오류';m.className='msg error'};
+x.onreadystatechange=function(){
+if(x.readyState===4&&x.status===405&&method==='POST'){sendReq('GET');return}
+};
 x.timeout=30000;
 x.ontimeout=function(){b.disabled=false;m.textContent='⏱️ 시간 초과';m.className='msg error'};
-x.send();
+x.send(method==='POST'?null:'');
+}
+sendReq('POST');
 };
 })();
 </script>
