@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function RevalidatePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  const handleRevalidate = async () => {
+  const handleRevalidate = useCallback(async () => {
     setLoading(true);
     setResult(null);
 
@@ -37,19 +37,66 @@ export default function RevalidatePage() {
           message += `\n\n📊 동기화 결과:\n- 생성: ${stats.created}개\n- 업데이트: ${stats.updated}개\n- 변경 없음: ${stats.skipped}개\n- 삭제: ${stats.deleted}개`;
         }
         setResult(message);
-        // 3초 후 메인 페이지로 이동
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 3000);
+        
+        // iframe에서 호출된 경우 부모 창에 결과 전송
+        if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'revalidate-result',
+            success: true,
+            message: data.message
+          }, window.location.origin);
+        }
+        
+        // 3초 후 메인 페이지로 이동 (iframe이 아닌 경우만)
+        if (window.parent === window) {
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+        }
       } else {
-        setResult(`❌ 실패: ${data.error || '알 수 없는 오류'}`);
+        const errorMsg = `❌ 실패: ${data.error || '알 수 없는 오류'}`;
+        setResult(errorMsg);
+        
+        // iframe에서 호출된 경우 부모 창에 결과 전송
+        if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'revalidate-result',
+            success: false,
+            error: data.error || '알 수 없는 오류'
+          }, window.location.origin);
+        }
       }
     } catch (error) {
-      setResult(`❌ 오류: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = `❌ 오류: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      setResult(errorMsg);
+      
+      // iframe에서 호출된 경우 부모 창에 결과 전송
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'revalidate-result',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }, window.location.origin);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // postMessage를 통한 외부에서 버튼 클릭 트리거 지원
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // 보안: 같은 origin에서만 허용
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data === 'trigger-revalidate') {
+        handleRevalidate();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [handleRevalidate]);
 
   return (
     <div className="min-h-screen bg-theme flex items-center justify-center p-4">

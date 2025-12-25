@@ -62,46 +62,79 @@
   </div>
 
   <script>
-  // ✅ 안전한 방법: 서버 API 엔드포인트 사용 (토큰 노출 없음)
-  // 현재 도메인을 자동으로 감지하여 API 호출
-  const API_URL = window.location.origin + '/api/revalidate';
+  // ✅ 방법 1: iframe으로 /revalidate 페이지를 로드하고 버튼 클릭 트리거
+  const REVALIDATE_URL = window.location.origin + '/revalidate';
+  var revalidateIframe = null;
 
   document.getElementById("triggerButton").addEventListener("click", function() {
     var button = document.getElementById("triggerButton");
     var messageElement = document.getElementById("message");
     
+    // iframe이 없으면 생성
+    if (!revalidateIframe) {
+      messageElement.textContent = "페이지 로딩 중...";
+      messageElement.className = "message";
+      
+      // 숨겨진 iframe 생성
+      revalidateIframe = document.createElement('iframe');
+      revalidateIframe.src = REVALIDATE_URL;
+      revalidateIframe.style.display = 'none';
+      revalidateIframe.style.width = '0';
+      revalidateIframe.style.height = '0';
+      document.body.appendChild(revalidateIframe);
+      
+      // iframe 로드 대기
+      revalidateIframe.onload = function() {
+        button.disabled = false;
+        messageElement.textContent = "✅ 준비 완료! 버튼을 다시 클릭하세요.";
+        messageElement.className = "message success";
+      };
+      
+      return;
+    }
+    
     button.disabled = true;
     messageElement.textContent = "요청 전송 중...";
     messageElement.className = "message";
-
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", API_URL, true);
-    xhr.setRequestHeader("Content-Type", "application/json");
-
-    xhr.onload = function() {
-      button.disabled = false;
-      try {
-        var response = JSON.parse(xhr.responseText);
-        if (xhr.status === 200 && response.revalidated) {
-          messageElement.textContent = "✅ " + (response.message || "요청이 성공적으로 전송되었습니다!");
-          messageElement.className = "message success";
-        } else {
-          messageElement.textContent = "❌ " + (response.error || "요청 전송에 실패했습니다. (상태 코드: " + xhr.status + ")");
-          messageElement.className = "message error";
+    
+    // iframe에 메시지 전송하여 버튼 클릭 트리거
+    try {
+      revalidateIframe.contentWindow.postMessage('trigger-revalidate', window.location.origin);
+      
+      // 결과를 받기 위한 리스너 (선택사항)
+      var messageListener = function(event) {
+        if (event.origin !== window.location.origin) return;
+        
+        if (event.data && event.data.type === 'revalidate-result') {
+          button.disabled = false;
+          if (event.data.success) {
+            messageElement.textContent = "✅ " + (event.data.message || "요청이 성공적으로 전송되었습니다!");
+            messageElement.className = "message success";
+          } else {
+            messageElement.textContent = "❌ " + (event.data.error || "요청 전송에 실패했습니다.");
+            messageElement.className = "message error";
+          }
+          window.removeEventListener('message', messageListener);
         }
-      } catch (e) {
-        messageElement.textContent = "❌ 응답 파싱 오류: " + e.message;
-        messageElement.className = "message error";
-      }
-    };
-
-    xhr.onerror = function() {
+      };
+      
+      window.addEventListener('message', messageListener);
+      
+      // 타임아웃 설정 (10초)
+      setTimeout(function() {
+        window.removeEventListener('message', messageListener);
+        if (button.disabled) {
+          button.disabled = false;
+          messageElement.textContent = "⏱️ 응답 대기 중... (시간이 오래 걸릴 수 있습니다)";
+          messageElement.className = "message";
+        }
+      }, 10000);
+      
+    } catch (e) {
       button.disabled = false;
-      messageElement.textContent = "❌ 요청 전송 중 알 수 없는 오류가 발생했습니다.";
+      messageElement.textContent = "❌ 오류: " + e.message;
       messageElement.className = "message error";
-    };
-
-    xhr.send();
+    }
   });
   </script>
 </body>
