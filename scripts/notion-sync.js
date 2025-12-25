@@ -19,22 +19,35 @@ const n2m = new NotionToMarkdown({ notionClient: notion });
 const DATA_DIR = path.join(process.cwd(), 'content', 'posts');
 
 async function fetchPosts() {
-  const response = await notion.databases.query({
-    database_id: process.env.NOTION_DATABASE_ID,
-    filter: {
-      and: [
-        {
-          property: '공개',
-          checkbox: { equals: true },
-        },
-      ],
+  // @notionhq/client 5.6.0에는 databases.query가 제대로 작동하지 않으므로 직접 HTTP 요청 사용
+  const response = await fetch(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_ID}/query`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.NOTION_API_KEY}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json',
     },
-    sorts: [
-      { property: '날짜', direction: 'descending' },
-    ],
+    body: JSON.stringify({
+      filter: {
+        and: [
+          {
+            property: '공개',
+            checkbox: { equals: true },
+          },
+        ],
+      },
+      sorts: [
+        { property: '날짜', direction: 'descending' },
+      ],
+    }),
   });
 
-  return response.results;
+  if (!response.ok) {
+    throw new Error(`Notion API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.results;
 }
 
 async function pageToMarkdown(pageId) {
@@ -143,4 +156,5 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
 
