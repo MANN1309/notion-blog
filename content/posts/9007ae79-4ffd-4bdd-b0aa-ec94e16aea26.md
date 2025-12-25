@@ -1,9 +1,12 @@
 ---
-title: "확언과 시각화"
-slug: "9007ae79-4ffd-4bdd-b0aa-ec94e16aea26"
-date: "2024-02-08T10:42:00.000Z"
-category: "영감"
-tags: ["내 생각", "영감"]
+id: 9007ae79-4ffd-4bdd-b0aa-ec94e16aea26
+title: 확언과 시각화
+slug: 9007ae79-4ffd-4bdd-b0aa-ec94e16aea26
+date: '2024-02-08T10:42:00.000Z'
+category: 영감
+tags:
+  - 내 생각
+  - 영감
 thumbnail: null
 excerpt: null
 published: true
