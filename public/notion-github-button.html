@@ -101,12 +101,24 @@
     try {
       revalidateIframe.contentWindow.postMessage('trigger-revalidate', window.location.origin);
       
-      // 결과를 받기 위한 리스너 (선택사항)
+      var timeoutId = null;
+      var isCompleted = false;
+      
+      // 결과를 받기 위한 리스너
       var messageListener = function(event) {
         if (event.origin !== window.location.origin) return;
         
         if (event.data && event.data.type === 'revalidate-result') {
+          isCompleted = true;
           button.disabled = false;
+          
+          // 타임아웃 취소
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          
+          // 성공/실패 메시지 표시
           if (event.data.success) {
             messageElement.textContent = "✅ " + (event.data.message || "요청이 성공적으로 전송되었습니다!");
             messageElement.className = "message success";
@@ -114,21 +126,31 @@
             messageElement.textContent = "❌ " + (event.data.error || "요청 전송에 실패했습니다.");
             messageElement.className = "message error";
           }
+          
           window.removeEventListener('message', messageListener);
         }
       };
       
       window.addEventListener('message', messageListener);
       
-      // 타임아웃 설정 (10초)
-      setTimeout(function() {
-        window.removeEventListener('message', messageListener);
-        if (button.disabled) {
+      // 타임아웃 설정 (30초) - GitHub Actions가 트리거되는데 시간이 걸릴 수 있음
+      timeoutId = setTimeout(function() {
+        if (!isCompleted) {
+          // 타임아웃 후에도 리스너는 유지 (나중에 응답이 오면 처리)
           button.disabled = false;
-          messageElement.textContent = "⏱️ 응답 대기 중... (시간이 오래 걸릴 수 있습니다)";
+          messageElement.textContent = "⏱️ 응답 대기 중... (GitHub Actions가 실행 중일 수 있습니다. 잠시 후 다시 확인해주세요.)";
           messageElement.className = "message";
+          
+          // 추가 대기 후에도 응답이 없으면 타임아웃으로 처리
+          setTimeout(function() {
+            if (!isCompleted) {
+              window.removeEventListener('message', messageListener);
+              messageElement.textContent = "⏱️ 응답 시간 초과. GitHub Actions가 정상적으로 트리거되었는지 확인해주세요.";
+              messageElement.className = "message";
+            }
+          }, 60000); // 추가 60초 대기
         }
-      }, 10000);
+      }, 30000); // 30초 타임아웃
       
     } catch (e) {
       button.disabled = false;
