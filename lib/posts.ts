@@ -29,14 +29,15 @@ export async function getPosts(): Promise<PostMeta[]> {
   try {
     // content/posts 디렉토리가 없으면 빈 배열 반환
     if (!fs.existsSync(postsDirectory)) {
-      console.warn('Posts directory does not exist:', postsDirectory);
+      console.warn('[getPosts] Posts directory does not exist:', postsDirectory);
       return [];
     }
 
-    const fileNames = fs.readdirSync(postsDirectory);
-    const postsWithNulls: (PostMeta | null)[] = fileNames
-      .filter((fileName) => fileName.endsWith('.md'))
-      .map((fileName) => {
+    const fileNames = fs.readdirSync(postsDirectory).filter((fileName) => fileName.endsWith('.md'));
+    console.log(`[getPosts] Found ${fileNames.length} markdown files`);
+    
+    const postsWithNulls: (PostMeta | null)[] = fileNames.map((fileName) => {
+      try {
         const fullPath = path.join(postsDirectory, fileName);
         const fileContents = fs.readFileSync(fullPath, 'utf8');
         const { data, content } = matter(fileContents);
@@ -57,7 +58,7 @@ export async function getPosts(): Promise<PostMeta[]> {
           excerpt = plainText.substring(0, 150);
         }
 
-        return {
+        const post: PostMeta = {
           id: fileName.replace(/\.md$/, ''),
           title: data.title || '제목 없음',
           slug: data.slug || fileName.replace(/\.md$/, ''),
@@ -66,8 +67,15 @@ export async function getPosts(): Promise<PostMeta[]> {
           tags: data.tags || [],
           thumbnail: data.thumbnail || null,
           excerpt: excerpt || null,
-        } as PostMeta;
-      });
+        };
+
+        console.log(`[getPosts] Loaded post: ${post.title} (slug: ${post.slug})`);
+        return post;
+      } catch (error) {
+        console.error(`[getPosts] Error reading ${fileName}:`, error);
+        return null;
+      }
+    });
     
     const allPostsData: PostMeta[] = postsWithNulls
       .filter((post): post is PostMeta => post !== null)
@@ -76,9 +84,10 @@ export async function getPosts(): Promise<PostMeta[]> {
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
 
+    console.log(`[getPosts] Returning ${allPostsData.length} posts`);
     return allPostsData;
   } catch (error) {
-    console.error('Error reading posts:', error);
+    console.error('[getPosts] Error reading posts:', error);
     return [];
   }
 }
@@ -87,19 +96,35 @@ export async function getPosts(): Promise<PostMeta[]> {
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   try {
     if (!fs.existsSync(postsDirectory)) {
+      console.warn('[getPostBySlug] Posts directory does not exist:', postsDirectory);
       return null;
     }
 
-    const fileNames = fs.readdirSync(postsDirectory);
-    const fileName = fileNames.find(
-      (name) =>
-        name.endsWith('.md') &&
-        (name.replace(/\.md$/, '') === slug ||
-          matter(fs.readFileSync(path.join(postsDirectory, name), 'utf8')).data
-            .slug === slug)
-    );
+    const fileNames = fs.readdirSync(postsDirectory).filter((name) => name.endsWith('.md'));
+    
+    // 먼저 파일명으로 직접 매칭 시도
+    let fileName = fileNames.find((name) => name.replace(/\.md$/, '') === slug);
+    
+    // 파일명으로 찾지 못한 경우, frontmatter의 slug로 검색
+    if (!fileName) {
+      for (const name of fileNames) {
+        try {
+          const fullPath = path.join(postsDirectory, name);
+          const fileContents = fs.readFileSync(fullPath, 'utf8');
+          const { data } = matter(fileContents);
+          if (data.slug === slug) {
+            fileName = name;
+            break;
+          }
+        } catch (err) {
+          console.warn(`[getPostBySlug] Error reading ${name}:`, err);
+          continue;
+        }
+      }
+    }
 
     if (!fileName) {
+      console.warn(`[getPostBySlug] Post not found for slug: ${slug}`);
       return null;
     }
 
@@ -117,7 +142,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
       excerpt = plainText.substring(0, 150);
     }
 
-    return {
+    const post = {
       id: fileName.replace(/\.md$/, ''),
       title: data.title || '제목 없음',
       slug: data.slug || fileName.replace(/\.md$/, ''),
@@ -128,8 +153,11 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
       excerpt: excerpt || null,
       content: content,
     };
+
+    console.log(`[getPostBySlug] Found post: ${post.title} (slug: ${post.slug})`);
+    return post;
   } catch (error) {
-    console.error('Error reading post:', error);
+    console.error('[getPostBySlug] Error reading post:', error);
     return null;
   }
 }

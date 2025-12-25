@@ -113,20 +113,22 @@ function ensureDir() {
 }
 
 function savePost(post) {
-  const frontmatter = [
+  // YAML frontmatter 생성 (null 값은 따옴표 없이 null로)
+  const frontmatterLines = [
     '---',
     `title: "${post.title.replace(/"/g, '\\"')}"`,
     `slug: "${post.slug}"`,
     `date: "${post.date}"`,
-    `category: ${post.category ? `"${post.category}"` : null}`,
+    post.category ? `category: "${post.category}"` : 'category: null',
     `tags: [${(post.tags || []).map((t) => `"${t}"`).join(', ')}]`,
-    `thumbnail: ${post.thumbnail ? `"${post.thumbnail}"` : null}`,
-    `excerpt: ${post.excerpt ? `"${post.excerpt.replace(/"/g, '\\"')}"` : null}`,
+    post.thumbnail ? `thumbnail: "${post.thumbnail}"` : 'thumbnail: null',
+    post.excerpt ? `excerpt: "${post.excerpt.replace(/"/g, '\\"')}"` : 'excerpt: null',
     `published: true`,
     '---',
     '',
-  ].join('\n');
+  ];
 
+  const frontmatter = frontmatterLines.join('\n');
   const filePath = path.join(DATA_DIR, `${post.slug}.md`);
   fs.writeFileSync(filePath, `${frontmatter}${post.content}`, 'utf8');
   console.log(`[save] ${filePath}`);
