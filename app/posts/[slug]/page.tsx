@@ -23,7 +23,7 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const post = await getPostBySlug(slug)
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-domain.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://woosm-blog.vercel.app'
 
   if (!post) {
     return {
@@ -63,7 +63,7 @@ export default async function PostPage({
 }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-domain.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://woosm-blog.vercel.app'
 
   if (!post) {
     notFound();
