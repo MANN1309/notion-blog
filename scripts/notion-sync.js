@@ -59,28 +59,69 @@ async function pageToMarkdown(pageId) {
 async function buildPost(page) {
   const props = page.properties || {};
 
-  const title =
-    props.Title?.title?.[0]?.plain_text ||
-    props.title?.title?.[0]?.plain_text ||
-    '제목 없음';
+  // Title 속성 찾기 (다양한 형식 지원)
+  // lib/notion.ts와 동일한 로직 사용
+  let title = '제목 없음';
+  if (props.Title?.title?.[0]?.plain_text) {
+    title = props.Title.title[0].plain_text;
+  } else if (props.title?.title?.[0]?.plain_text) {
+    title = props.title.title[0].plain_text;
+  } else {
+    // title 타입 속성 찾기 (모든 속성 중에서 title 타입 찾기)
+    const titleProp = Object.values(props).find((p) => p && p.type === 'title');
+    if (titleProp?.title?.[0]?.plain_text) {
+      title = titleProp.title[0].plain_text;
+    } else {
+      // 디버깅: 어떤 속성들이 있는지 확인
+      console.warn(`[buildPost] Title not found for page ${page.id}. Available properties:`, Object.keys(props));
+    }
+  }
 
-  const slug =
-    props.Slug?.rich_text?.[0]?.plain_text ||
-    page.id;
+  // Slug 속성 찾기
+  let slug = page.id;
+  if (props.Slug?.rich_text?.[0]?.plain_text) {
+    slug = props.Slug.rich_text[0].plain_text;
+  } else if (props.slug?.rich_text?.[0]?.plain_text) {
+    slug = props.slug.rich_text[0].plain_text;
+  } else if (title && title !== '제목 없음') {
+    // Slug가 없으면 제목에서 slug 생성 (한글 제거, 소문자, 공백을 하이픈으로)
+    slug = title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '') // 특수문자 제거
+      .replace(/\s+/g, '-') // 공백을 하이픈으로
+      .replace(/-+/g, '-') // 연속된 하이픈 제거
+      .trim();
+    // slug가 비어있으면 UUID 사용
+    if (!slug) {
+      slug = page.id;
+    }
+  }
 
-  const date =
-    props.날짜?.date?.start ||
-    props.날짜?.date ||
-    page.created_time;
+  // 날짜 처리
+  let date = page.created_time;
+  if (props.날짜?.date?.start) {
+    date = props.날짜.date.start;
+  } else if (props.날짜?.date) {
+    date = props.날짜.date;
+  } else if (props.date?.date?.start) {
+    date = props.date.date.start;
+  }
 
+  // 카테고리 처리
   const category =
     props.카테고리?.select?.name ||
     props.카테고리?.multi_select?.[0]?.name ||
+    props.category?.select?.name ||
+    props.category?.multi_select?.[0]?.name ||
     null;
 
+  // 태그 처리
   const tags =
-    props.태그?.multi_select?.map((t) => t.name) || [];
+    props.태그?.multi_select?.map((t) => t.name) ||
+    props.tags?.multi_select?.map((t) => t.name) ||
+    [];
 
+  // 썸네일 처리
   const thumbnail =
     props.Thumbnail?.url ||
     props.thumbnail?.url ||
@@ -88,10 +129,15 @@ async function buildPost(page) {
     props.thumbnail?.files?.[0]?.file?.url ||
     null;
 
+  // Excerpt 처리
   const excerpt =
-    props.Excerpt?.rich_text?.[0]?.plain_text || null;
+    props.Excerpt?.rich_text?.[0]?.plain_text ||
+    props.excerpt?.rich_text?.[0]?.plain_text ||
+    null;
 
   const content = await pageToMarkdown(page.id);
+
+  console.log(`[buildPost] ${title} (slug: ${slug})`);
 
   return {
     id: page.id,
