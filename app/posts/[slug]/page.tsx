@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 // 정적 파일에서 포스트 읽기 (GitHub Actions가 생성한 마크다운 파일)
-import { getPostBySlug } from '@/lib/posts';
+import { getPostBySlug, getPosts } from '@/lib/posts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Giscus from '@/app/components/Giscus';
@@ -9,6 +9,14 @@ import Giscus from '@/app/components/Giscus';
 // 정적 생성 (빌드 타임에 생성, 수동 재검증으로 갱신)
 export const dynamic = 'force-static';
 export const dynamicParams = false; // 없는 slug는 404
+
+// 빌드 타임에 모든 포스트의 slug를 미리 생성
+export async function generateStaticParams() {
+  const posts = await getPosts();
+  return posts.map((post) => ({
+    slug: post.slug,
+  }));
+}
 
 export default async function PostPage({
   params,

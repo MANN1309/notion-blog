@@ -149,11 +149,13 @@ async function buildPost(page) {
   }
 
   // Slug 속성 찾기
-  let slug = page.id;
+  let slug = page.id; // 기본값: UUID
   if (props.Slug?.rich_text?.[0]?.plain_text) {
     slug = props.Slug.rich_text[0].plain_text;
+    console.log(`[buildPost] Using Slug property: ${slug}`);
   } else if (props.slug?.rich_text?.[0]?.plain_text) {
     slug = props.slug.rich_text[0].plain_text;
+    console.log(`[buildPost] Using slug property: ${slug}`);
   } else if (title && title !== '제목 없음') {
     // Slug가 없으면 제목에서 slug 생성
     // 영문/숫자만 있는 경우에만 slug 생성, 한글이 포함된 경우 UUID 사용
@@ -169,14 +171,26 @@ async function buildPost(page) {
         .replace(/-+/g, '-') // 연속된 하이픈 제거
         .replace(/^-|-$/g, ''); // 앞뒤 하이픈 제거
       
-      // slug가 비어있거나 너무 짧으면 UUID 사용
-      if (!slug || slug.length < 2) {
+      // slug가 비어있거나 너무 짧거나 '-'만 있으면 UUID 사용
+      if (!slug || slug.length < 2 || slug === '-') {
+        console.log(`[buildPost] Generated slug is invalid (${slug}), using UUID`);
         slug = page.id;
+      } else {
+        console.log(`[buildPost] Generated slug from title: ${slug}`);
       }
     } else {
       // 한글이 포함된 경우 UUID 사용 (의미있는 slug 생성 불가)
+      console.log(`[buildPost] Title contains Korean, using UUID as slug`);
       slug = page.id;
     }
+  } else {
+    console.log(`[buildPost] No title found, using UUID as slug`);
+  }
+  
+  // 최종 slug 검증: 빈 문자열이나 '-'만 있으면 UUID 사용
+  if (!slug || slug.trim() === '' || slug === '-') {
+    console.warn(`[buildPost] Invalid slug detected (${slug}), forcing UUID`);
+    slug = page.id;
   }
 
   // 날짜 처리
