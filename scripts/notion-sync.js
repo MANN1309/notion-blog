@@ -78,8 +78,8 @@ async function buildPost(page) {
   console.log(`[buildPost] Processing page ${page.id}`);
   console.log(`[buildPost] Available property names:`, Object.keys(props));
   
-  // 방법 1: 먼저 일반적인 이름들 확인
-  const commonTitleNames = ['Title', 'title', '제목', '이름', 'Name', 'name'];
+  // 방법 1: 먼저 일반적인 이름들 확인 (Notion 데이터베이스의 실제 속성 이름 포함)
+  const commonTitleNames = ['게시물', 'Title', 'title', '제목', '이름', 'Name', 'name'];
   for (const name of commonTitleNames) {
     if (props[name]) {
       console.log(`[buildPost] Checking property "${name}":`, {
@@ -155,15 +155,26 @@ async function buildPost(page) {
   } else if (props.slug?.rich_text?.[0]?.plain_text) {
     slug = props.slug.rich_text[0].plain_text;
   } else if (title && title !== '제목 없음') {
-    // Slug가 없으면 제목에서 slug 생성 (한글 제거, 소문자, 공백을 하이픈으로)
-    slug = title
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '') // 특수문자 제거
-      .replace(/\s+/g, '-') // 공백을 하이픈으로
-      .replace(/-+/g, '-') // 연속된 하이픈 제거
-      .trim();
-    // slug가 비어있으면 UUID 사용
-    if (!slug) {
+    // Slug가 없으면 제목에서 slug 생성
+    // 영문/숫자만 있는 경우에만 slug 생성, 한글이 포함된 경우 UUID 사용
+    const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(title);
+    
+    if (!hasKorean) {
+      // 영문/숫자만 있는 경우 slug 생성
+      slug = title
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '') // 특수문자 제거
+        .replace(/\s+/g, '-') // 공백을 하이픈으로
+        .replace(/-+/g, '-') // 연속된 하이픈 제거
+        .replace(/^-|-$/g, ''); // 앞뒤 하이픈 제거
+      
+      // slug가 비어있거나 너무 짧으면 UUID 사용
+      if (!slug || slug.length < 2) {
+        slug = page.id;
+      }
+    } else {
+      // 한글이 포함된 경우 UUID 사용 (의미있는 slug 생성 불가)
       slug = page.id;
     }
   }
