@@ -316,21 +316,6 @@ function savePost(post) {
           }
           break;
         }
-        
-        // ID가 없지만 slug가 잘못된 패턴이고 제목이 같으면 수정
-        // 잘못된 slug 패턴: "4-", "-", "ai-", "-z", 끝이 '-'로 끝나는 경우
-        const isInvalidSlug = !oldSlug || oldSlug.length < 2 || oldSlug === '-' || 
-                              oldSlug.endsWith('-') || oldSlug.startsWith('-');
-        
-        if (isInvalidSlug) {
-          const titleMatch = content.match(/^title:\s*["']([^"']+)["']/m);
-          if (titleMatch && titleMatch[1] === post.title) {
-            console.log(`[save] Found invalid slug "${oldSlug}" for post "${post.title}", will update to "${post.slug}"`);
-            fs.unlinkSync(filePath);
-            console.log(`[save] Removed old file with invalid slug: ${fileName}`);
-            break;
-          }
-        }
       } catch (err) {
         // 파일 읽기 실패 시 무시하고 계속 진행
         console.warn(`[save] Error reading ${fileName}:`, err.message);
