@@ -43,10 +43,21 @@ async function fetchPosts() {
   });
 
   if (!response.ok) {
-    throw new Error(`Notion API error: ${response.statusText}`);
+    const errorText = await response.text();
+    throw new Error(`Notion API error: ${response.statusText} - ${errorText}`);
   }
 
   const data = await response.json();
+  
+  // 디버깅: 첫 번째 페이지의 구조 확인
+  if (data.results && data.results.length > 0) {
+    const firstPage = data.results[0];
+    console.log('[fetchPosts] First page structure:');
+    console.log('[fetchPosts] Page ID:', firstPage.id);
+    console.log('[fetchPosts] Page properties keys:', Object.keys(firstPage.properties || {}));
+    console.log('[fetchPosts] First page properties:', JSON.stringify(firstPage.properties, null, 2));
+  }
+  
   return data.results;
 }
 
@@ -63,26 +74,53 @@ async function buildPost(page) {
   // Notion 데이터베이스의 제목 속성 이름은 사용자가 설정한 이름일 수 있음
   let title = '제목 없음';
   
+  // 디버깅: 모든 속성 정보 출력
+  console.log(`[buildPost] Processing page ${page.id}`);
+  console.log(`[buildPost] Available property names:`, Object.keys(props));
+  
   // 방법 1: 먼저 일반적인 이름들 확인
   const commonTitleNames = ['Title', 'title', '제목', '이름', 'Name', 'name'];
   for (const name of commonTitleNames) {
-    if (props[name]?.type === 'title' && props[name]?.title?.[0]?.plain_text) {
-      title = props[name].title[0].plain_text;
-      break;
+    if (props[name]) {
+      console.log(`[buildPost] Checking property "${name}":`, {
+        type: props[name].type,
+        hasTitle: props[name].type === 'title',
+        titleValue: props[name].title?.[0]?.plain_text
+      });
+      
+      if (props[name]?.type === 'title' && props[name]?.title?.[0]?.plain_text) {
+        title = props[name].title[0].plain_text;
+        console.log(`[buildPost] Found title in "${name}": ${title}`);
+        break;
+      }
     }
   }
   
   // 방법 2: title을 찾지 못한 경우, 모든 속성 중에서 type이 'title'인 속성 찾기
   if (title === '제목 없음') {
-    const titleProp = Object.values(props).find((p) => {
-      if (!p || typeof p !== 'object') return false;
-      return p.type === 'title';
+    console.log(`[buildPost] Title not found in common names, searching all properties...`);
+    const titleProps = Object.entries(props).filter(([name, prop]) => {
+      const isTitle = prop?.type === 'title';
+      if (isTitle) {
+        console.log(`[buildPost] Found title type property: "${name}"`, {
+          type: prop.type,
+          titleArray: prop.title,
+          titleText: prop.title?.[0]?.plain_text
+        });
+      }
+      return isTitle;
     });
     
-    if (titleProp?.title && Array.isArray(titleProp.title) && titleProp.title.length > 0) {
-      const titleText = titleProp.title[0]?.plain_text;
-      if (titleText) {
-        title = titleText;
+    if (titleProps.length > 0) {
+      const [propName, titleProp] = titleProps[0];
+      if (titleProp?.title && Array.isArray(titleProp.title) && titleProp.title.length > 0) {
+        const titleText = titleProp.title[0]?.plain_text;
+        if (titleText) {
+          title = titleText;
+          console.log(`[buildPost] Found title in property "${propName}": ${title}`);
+        } else {
+          console.warn(`[buildPost] Title property "${propName}" exists but has no text`);
+        }
       }
     }
   }
@@ -92,17 +130,20 @@ async function buildPost(page) {
     const propInfo = Object.entries(props).map(([name, prop]) => ({
       name,
       type: prop?.type,
-      hasTitle: prop?.type === 'title' ? (prop.title?.[0]?.plain_text || 'empty') : 'not title type'
+      hasTitle: prop?.type === 'title' ? (prop.title?.[0]?.plain_text || 'empty') : 'not title type',
+      fullProp: JSON.stringify(prop, null, 2)
     }));
-    console.warn(`[buildPost] Title not found for page ${page.id}`);
-    console.warn(`[buildPost] Property info:`, JSON.stringify(propInfo, null, 2));
+    console.error(`[buildPost] Title not found for page ${page.id}`);
+    console.error(`[buildPost] Property info:`, JSON.stringify(propInfo, null, 2));
     
     // 방법 4: 페이지 객체 자체에 title이 있는지 확인
     if (page.title) {
       if (typeof page.title === 'string') {
         title = page.title;
+        console.log(`[buildPost] Found title in page.title (string): ${title}`);
       } else if (Array.isArray(page.title) && page.title.length > 0) {
         title = page.title[0]?.plain_text || '제목 없음';
+        console.log(`[buildPost] Found title in page.title (array): ${title}`);
       }
     }
   }
