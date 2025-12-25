@@ -11,8 +11,8 @@ interface HomeProps {
   searchParams: Promise<{ category?: string; search?: string }>;
 }
 
-// 정적 생성 (빌드 타임에 생성, 수동 재검증으로 갱신)
-export const dynamic = 'force-static';
+// 동적 라우팅 허용 (카테고리 필터링을 위해 필요)
+export const dynamic = 'auto';
 
 // SEO 메타데이터
 export const metadata: Metadata = {
