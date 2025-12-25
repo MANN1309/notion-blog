@@ -1,5 +1,5 @@
 ---
-title: "제목 없음"
+title: "중요한 것은 긍정적인 마음가짐"
 slug: "161e753e-5e17-80ba-a0c1-cbaefc8fa1aa"
 date: "2024-12-19T00:56:00.000Z"
 category: "인생 가이드"

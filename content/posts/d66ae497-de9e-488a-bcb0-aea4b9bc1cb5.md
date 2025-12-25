@@ -1,5 +1,5 @@
 ---
-title: "제목 없음"
+title: "과연 나의 이상적인 망상은 단점인가?"
 slug: "d66ae497-de9e-488a-bcb0-aea4b9bc1cb5"
 date: "2024-09-01T12:11:00.000Z"
 category: "내 생각"

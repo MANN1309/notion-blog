@@ -1,5 +1,5 @@
 ---
-title: "제목 없음"
+title: "스마트폰에게 적대감을 느끼는 Z세대들"
 slug: "ece2aabd-debd-4ba6-b7e5-87c0d31e9b56"
 date: "2024-01-03T07:34:00.000Z"
 category: "내 생각"
