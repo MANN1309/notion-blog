@@ -289,7 +289,7 @@ function savePost(post) {
   const frontmatter = frontmatterLines.join('\n');
   const newFilePath = path.join(DATA_DIR, `${post.slug}.md`);
   
-  // 기존 파일들 중에서 이 포스트와 관련된 파일 확인 및 수정
+  // 기존 파일들 중에서 같은 ID를 가진 파일 확인 (slug 변경 시 정리)
   if (fs.existsSync(DATA_DIR)) {
     const existingFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.md'));
     
@@ -304,31 +304,13 @@ function savePost(post) {
       try {
         const content = fs.readFileSync(filePath, 'utf8');
         const idMatch = content.match(/^id:\s*["']([^"']+)["']/m);
-        const slugMatch = content.match(/^slug:\s*["']([^"']+)["']/m);
-        const titleMatch = content.match(/^title:\s*["']([^"']+)["']/m);
-        const dateMatch = content.match(/^date:\s*["']([^"']+)["']/m);
-        const oldSlug = slugMatch ? slugMatch[1] : fileName.replace(/\.md$/, '');
         
-        // 같은 ID를 가진 파일이 있으면 slug 업데이트
+        // 같은 ID를 가진 파일이 있으면 삭제 (slug 변경 또는 중복 방지)
         if (idMatch && idMatch[1] === post.id) {
-          if (oldSlug !== post.slug) {
-            console.log(`[save] Updating slug for post ${post.id}: ${oldSlug} -> ${post.slug}`);
-            fs.unlinkSync(filePath);
-            console.log(`[save] Removed old file: ${fileName}`);
-          }
+          console.log(`[save] Found existing file with same ID ${post.id}, removing: ${fileName}`);
+          fs.unlinkSync(filePath);
+          console.log(`[save] Removed old file: ${fileName}`);
           break;
-        }
-        
-        // ID가 없지만 제목과 날짜가 같으면 같은 포스트로 인식 (기존 한글 slug 파일 정리용)
-        if (!idMatch && titleMatch && dateMatch) {
-          const oldTitle = titleMatch[1];
-          const oldDate = dateMatch[1];
-          if (oldTitle === post.title && oldDate === post.date) {
-            console.log(`[save] Found duplicate post (same title and date) with old slug "${oldSlug}", removing: ${fileName}`);
-            fs.unlinkSync(filePath);
-            console.log(`[save] Removed old file: ${fileName}`);
-            break;
-          }
         }
       } catch (err) {
         // 파일 읽기 실패 시 무시하고 계속 진행
@@ -354,9 +336,57 @@ async function main() {
   const pages = await fetchPosts();
   console.log(`Found ${pages.length} pages.`);
 
+  // Notion에서 가져온 포스트의 ID와 slug 수집
+  const notionPostIds = new Set();
+  const notionPostSlugs = new Set();
+  
   for (const page of pages) {
     const post = await buildPost(page);
+    notionPostIds.add(post.id);
+    notionPostSlugs.add(post.slug);
     savePost(post);
+  }
+
+  // 기존 파일 중 Notion에 없는 파일 삭제 (공개 해제된 포스트 정리)
+  if (fs.existsSync(DATA_DIR)) {
+    const existingFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.md'));
+    let deletedCount = 0;
+    
+    for (const fileName of existingFiles) {
+      const filePath = path.join(DATA_DIR, fileName);
+      
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const idMatch = content.match(/^id:\s*["']([^"']+)["']/m);
+        const slugMatch = content.match(/^slug:\s*["']([^"']+)["']/m);
+        const fileSlug = slugMatch ? slugMatch[1] : fileName.replace(/\.md$/, '');
+        
+        // ID가 있고 Notion에 없으면 삭제 (공개 해제된 포스트)
+        if (idMatch && idMatch[1]) {
+          const fileId = idMatch[1];
+          if (!notionPostIds.has(fileId)) {
+            console.log(`[cleanup] Post ${fileId} is no longer published in Notion, removing: ${fileName}`);
+            fs.unlinkSync(filePath);
+            deletedCount++;
+            continue;
+          }
+        }
+        
+        // ID가 없지만 slug가 Notion에 없고, 파일명이 slug와 다르면 삭제 (중복 파일 정리)
+        // 단, id 필드가 없는 오래된 파일은 보존 (안전을 위해)
+        if (!idMatch && !notionPostSlugs.has(fileSlug) && fileName !== `${fileSlug}.md`) {
+          console.log(`[cleanup] Orphaned file (not in Notion and no id field), removing: ${fileName}`);
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        }
+      } catch (err) {
+        console.warn(`[cleanup] Error reading ${fileName}:`, err.message);
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`[cleanup] Removed ${deletedCount} file(s) that are no longer published.`);
+    }
   }
 
   console.log('Done.');
