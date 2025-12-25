@@ -1,38 +1,54 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
 // 정적 파일에서 포스트 읽기 (GitHub Actions가 생성한 마크다운 파일)
 import { getPosts } from '@/lib/posts';
-import TagsSidebar from './components/TagsSidebar';
+import CategorySidebar from './components/CategorySidebar';
 import ProfileSidebar from './components/ProfileSidebar';
 import SearchBar from './components/SearchBar';
 import PostCard from './components/PostCard';
 
 interface HomeProps {
-  searchParams: Promise<{ tag?: string; search?: string }>;
+  searchParams: Promise<{ category?: string; search?: string }>;
 }
 
 // 정적 생성 (빌드 타임에 생성, 수동 재검증으로 갱신)
 export const dynamic = 'force-static';
 
+// SEO 메타데이터
+export const metadata: Metadata = {
+  title: '블로그',
+  description: 'Notion에서 관리하는 블로그',
+  openGraph: {
+    title: '블로그',
+    description: 'Notion에서 관리하는 블로그',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '블로그',
+    description: 'Notion에서 관리하는 블로그',
+  },
+};
+
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const allPosts = await getPosts();
   
-  // 모든 태그 수집
-  const allTags = Array.from(
+  // 모든 카테고리 수집 (null 제외)
+  const allCategories = Array.from(
     new Set(
-      allPosts.flatMap((post: any) => [
-        ...((post.tags || []) as string[]),
-        ...(post.category ? [post.category as string] : []),
-      ])
+      allPosts
+        .map((post: any) => post.category)
+        .filter((category: string | null) => category !== null)
     )
   ).sort() as string[];
 
   // 필터링
   let filteredPosts = allPosts;
   
-  if (params.tag && params.tag !== 'All') {
+  if (params.category && params.category !== 'All') {
     filteredPosts = allPosts.filter((post: any) =>
-      post.tags.includes(params.tag) || post.category === params.tag
+      post.category === params.category
     );
   }
 
@@ -48,10 +64,10 @@ export default async function Home({ searchParams }: HomeProps) {
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
-          {/* Left Sidebar - Tags */}
+          {/* Left Sidebar - Categories */}
           <div className="hidden lg:block flex-shrink-0">
             <Suspense fallback={<div className="w-48">Loading...</div>}>
-              <TagsSidebar allTags={allTags} />
+              <CategorySidebar allCategories={allCategories} />
             </Suspense>
           </div>
 
@@ -74,7 +90,7 @@ export default async function Home({ searchParams }: HomeProps) {
             {filteredPosts.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-theme-muted">
-                  {params.search || params.tag
+                  {params.search || params.category
                     ? '검색 결과가 없습니다.'
                     : '아직 게시된 글이 없습니다.'}
                 </p>

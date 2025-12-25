@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 // 정적 파일에서 포스트 읽기 (GitHub Actions가 생성한 마크다운 파일)
 import { getPostBySlug, getPosts } from '@/lib/posts';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +19,43 @@ export async function generateStaticParams() {
   }));
 }
 
+// SEO 메타데이터 생성
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-domain.vercel.app'
+
+  if (!post) {
+    return {
+      title: '포스트를 찾을 수 없습니다',
+    }
+  }
+
+  return {
+    title: post.title,
+    description: post.excerpt || post.title,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt || post.title,
+      type: 'article',
+      publishedTime: post.date,
+      authors: ['작성자'],
+      tags: post.tags,
+      url: `${baseUrl}/posts/${post.slug}`,
+      images: post.thumbnail ? [post.thumbnail] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: post.excerpt || post.title,
+      images: post.thumbnail ? [post.thumbnail] : [],
+    },
+    alternates: {
+      canonical: `${baseUrl}/posts/${post.slug}`,
+    },
+  }
+}
+
 export default async function PostPage({
   params,
 }: {
@@ -25,13 +63,42 @@ export default async function PostPage({
 }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://your-domain.vercel.app'
 
   if (!post) {
     notFound();
   }
 
+  // 구조화된 데이터 (JSON-LD)
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: post.excerpt || post.title,
+    image: post.thumbnail || undefined,
+    datePublished: post.date,
+    dateModified: post.date,
+    author: {
+      '@type': 'Person',
+      name: '작성자',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: '블로그',
+      logo: {
+        '@type': 'ImageObject',
+        url: `${baseUrl}/logo.png`,
+      },
+    },
+  }
+
   return (
-    <div className="min-h-screen bg-theme">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <div className="min-h-screen bg-theme">
       <main className="container mx-auto px-4 py-16 max-w-4xl">
         <Link
           href="/"
@@ -97,5 +164,6 @@ export default async function PostPage({
         )}
       </main>
     </div>
+    </>
   );
 }
