@@ -62,53 +62,35 @@
   </div>
 
   <script>
-  // ⚠️ 아래 정보를 본인의 정보로 변경하세요!
-  const GITHUB_USERNAME = 'MANN1309';  // GitHub 사용자명
-  const GITHUB_REPO = 'notion-blog';   // 리포지토리 이름
-  const GITHUB_TOKEN = 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN';  // GitHub Personal Access Token
-  
-  // ⚠️ 중요: event_type을 "notion-sync"로 설정 (현재 워크플로우와 일치)
-  const EVENT_TYPE = 'notion-sync';
+  // ✅ 안전한 방법: 서버 API 엔드포인트 사용 (토큰 노출 없음)
+  // 현재 도메인을 자동으로 감지하여 API 호출
+  const API_URL = window.location.origin + '/api/revalidate';
 
   document.getElementById("triggerButton").addEventListener("click", function() {
     var button = document.getElementById("triggerButton");
     var messageElement = document.getElementById("message");
-    
-    // 토큰 확인
-    if (GITHUB_TOKEN === 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN') {
-      messageElement.textContent = "❌ GitHub Token을 설정해주세요!";
-      messageElement.className = "message error";
-      return;
-    }
     
     button.disabled = true;
     messageElement.textContent = "요청 전송 중...";
     messageElement.className = "message";
 
     var xhr = new XMLHttpRequest();
-    var url = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/dispatches`;
-    
-    xhr.open("POST", url, true);
-    xhr.setRequestHeader("Accept", "application/vnd.github.v3+json");
-    xhr.setRequestHeader("Authorization", "Bearer " + GITHUB_TOKEN);
+    xhr.open("POST", API_URL, true);
     xhr.setRequestHeader("Content-Type", "application/json");
 
     xhr.onload = function() {
       button.disabled = false;
-      if (xhr.status === 204) {
-        messageElement.textContent = "✅ 요청이 성공적으로 전송되었습니다! (상태 코드: " + xhr.status + ")";
-        messageElement.className = "message success";
-      } else {
-        var errorMsg = "❌ 요청 전송에 실패했습니다. (상태 코드: " + xhr.status + ")";
-        try {
-          var response = JSON.parse(xhr.responseText);
-          if (response.message) {
-            errorMsg += "\n오류: " + response.message;
-          }
-        } catch (e) {
-          errorMsg += "\n응답: " + xhr.responseText;
+      try {
+        var response = JSON.parse(xhr.responseText);
+        if (xhr.status === 200 && response.revalidated) {
+          messageElement.textContent = "✅ " + (response.message || "요청이 성공적으로 전송되었습니다!");
+          messageElement.className = "message success";
+        } else {
+          messageElement.textContent = "❌ " + (response.error || "요청 전송에 실패했습니다. (상태 코드: " + xhr.status + ")");
+          messageElement.className = "message error";
         }
-        messageElement.textContent = errorMsg;
+      } catch (e) {
+        messageElement.textContent = "❌ 응답 파싱 오류: " + e.message;
         messageElement.className = "message error";
       }
     };
@@ -119,9 +101,7 @@
       messageElement.className = "message error";
     };
 
-    xhr.send(JSON.stringify({
-      "event_type": EVENT_TYPE
-    }));
+    xhr.send();
   });
   </script>
 </body>
