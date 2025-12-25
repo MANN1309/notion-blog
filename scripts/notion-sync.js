@@ -305,6 +305,8 @@ function savePost(post) {
         const content = fs.readFileSync(filePath, 'utf8');
         const idMatch = content.match(/^id:\s*["']([^"']+)["']/m);
         const slugMatch = content.match(/^slug:\s*["']([^"']+)["']/m);
+        const titleMatch = content.match(/^title:\s*["']([^"']+)["']/m);
+        const dateMatch = content.match(/^date:\s*["']([^"']+)["']/m);
         const oldSlug = slugMatch ? slugMatch[1] : fileName.replace(/\.md$/, '');
         
         // 같은 ID를 가진 파일이 있으면 slug 업데이트
@@ -315,6 +317,18 @@ function savePost(post) {
             console.log(`[save] Removed old file: ${fileName}`);
           }
           break;
+        }
+        
+        // ID가 없지만 제목과 날짜가 같으면 같은 포스트로 인식 (기존 한글 slug 파일 정리용)
+        if (!idMatch && titleMatch && dateMatch) {
+          const oldTitle = titleMatch[1];
+          const oldDate = dateMatch[1];
+          if (oldTitle === post.title && oldDate === post.date) {
+            console.log(`[save] Found duplicate post (same title and date) with old slug "${oldSlug}", removing: ${fileName}`);
+            fs.unlinkSync(filePath);
+            console.log(`[save] Removed old file: ${fileName}`);
+            break;
+          }
         }
       } catch (err) {
         // 파일 읽기 실패 시 무시하고 계속 진행
