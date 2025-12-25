@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// CORS 헤더 설정
-function setCorsHeaders(response: NextResponse) {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+// CORS 헤더 설정 (더 강화된 버전)
+function setCorsHeaders(response: NextResponse, request?: NextRequest) {
+  // Origin 헤더 확인
+  const origin = request?.headers.get('origin');
+  
+  // 모든 Origin 허용 (프로덕션에서는 특정 도메인만 허용하는 것이 좋음)
+  response.headers.set('Access-Control-Allow-Origin', origin || '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  response.headers.set('Access-Control-Max-Age', '86400'); // 24시간
   return response;
 }
 
 // OPTIONS 요청 처리 (CORS preflight)
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
   const response = new NextResponse(null, { status: 204 });
-  return setCorsHeaders(response);
+  return setCorsHeaders(response, request);
 }
 
 export async function POST(request: NextRequest) {
@@ -25,7 +31,7 @@ export async function POST(request: NextRequest) {
       const token = authHeader?.replace('Bearer ', '') || urlToken;
       if (token !== expectedToken) {
         const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        return setCorsHeaders(response);
+        return setCorsHeaders(response, request);
       }
     }
 
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
         { error: 'GH_TOKEN not configured' },
         { status: 500 }
       );
-      return setCorsHeaders(response);
+      return setCorsHeaders(response, request);
     }
 
     // 리포지토리 정보 (환경변수로 설정 가능, 기본값: MANN1309/notion-blog)
@@ -69,7 +75,7 @@ export async function POST(request: NextRequest) {
         },
         { status: dispatchResponse.status }
       );
-      return setCorsHeaders(response);
+      return setCorsHeaders(response, request);
     }
 
     const dispatchData = await dispatchResponse.json().catch(() => ({}));
@@ -80,19 +86,19 @@ export async function POST(request: NextRequest) {
       dispatch: dispatchData,
       timestamp: new Date().toISOString()
     });
-    return setCorsHeaders(response);
+    return setCorsHeaders(response, request);
   } catch (error) {
     console.error('[revalidate] Error:', error);
     const response = NextResponse.json(
       { error: 'Error triggering workflow', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
-    return setCorsHeaders(response);
+    return setCorsHeaders(response, request);
   }
 }
 
 export async function GET(request: NextRequest) {
   const response = await POST(request);
-  return setCorsHeaders(response);
+  return setCorsHeaders(response, request);
 }
 
