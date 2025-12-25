@@ -148,6 +148,16 @@ async function buildPost(page) {
     }
   }
 
+  // 날짜 처리 (slug 생성에 필요하므로 먼저 처리)
+  let date = page.created_time;
+  if (props.날짜?.date?.start) {
+    date = props.날짜.date.start;
+  } else if (props.날짜?.date) {
+    date = props.날짜.date;
+  } else if (props.date?.date?.start) {
+    date = props.date.date.start;
+  }
+
   // Slug 속성 찾기
   let slug = page.id; // 기본값: UUID
   if (props.Slug?.rich_text?.[0]?.plain_text) {
@@ -158,49 +168,54 @@ async function buildPost(page) {
     console.log(`[buildPost] Using slug property: ${slug}`);
   } else if (title && title !== '제목 없음') {
     // Slug가 없으면 제목에서 slug 생성
-    // 영문/숫자만 있는 경우에만 slug 생성, 한글이 포함된 경우 UUID 사용
-    const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(title);
+    // 날짜에서 YYYY-MM-DD 형식 추출
+    let dateStr = '';
+    if (date) {
+      try {
+        const d = new Date(date);
+        dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+      } catch (e) {
+        // 날짜 파싱 실패 시 빈 문자열
+      }
+    }
     
-    if (!hasKorean) {
-      // 영문/숫자만 있는 경우 slug 생성
-      slug = title
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, '') // 특수문자 제거
-        .replace(/\s+/g, '-') // 공백을 하이픈으로
-        .replace(/-+/g, '-') // 연속된 하이픈 제거
-        .replace(/^-|-$/g, ''); // 앞뒤 하이픈 제거
-      
-      // slug가 비어있거나 너무 짧거나 '-'만 있으면 UUID 사용
-      if (!slug || slug.length < 2 || slug === '-') {
-        console.log(`[buildPost] Generated slug is invalid (${slug}), using UUID`);
-        slug = page.id;
+    // 제목에서 slug 생성 (영문, 숫자, 하이픈만 사용 - Google sitemap 지침 준수)
+    // 한글은 제거하고 영문/숫자만 추출하여 sitemap 호환성 보장
+    let titleSlug = title
+      .trim()
+      .replace(/[^\w\s-]/g, '') // 영문, 숫자, 하이픈, 공백만 유지 (한글 및 특수문자 제거)
+      .replace(/\s+/g, '-') // 공백을 하이픈으로
+      .replace(/-+/g, '-') // 연속된 하이픈 제거
+      .replace(/^-|-$/g, '') // 앞뒤 하이픈 제거
+      .toLowerCase(); // 소문자로 변환
+    
+    // slug가 비어있거나 너무 짧거나 '-'만 있거나 끝이 '-'로 끝나면 처리
+    if (!titleSlug || titleSlug.length < 2 || titleSlug === '-' || titleSlug.endsWith('-')) {
+      // 제목에서 slug 생성 실패 시 날짜 + UUID 조합 사용
+      if (dateStr) {
+        slug = `${dateStr}-${page.id.substring(0, 8)}`;
+        console.log(`[buildPost] Title slug invalid or contains only Korean, using date + UUID: ${slug}`);
       } else {
-        console.log(`[buildPost] Generated slug from title: ${slug}`);
+        slug = page.id;
+        console.log(`[buildPost] Cannot generate slug from title, using UUID`);
       }
     } else {
-      // 한글이 포함된 경우 UUID 사용 (의미있는 slug 생성 불가)
-      console.log(`[buildPost] Title contains Korean, using UUID as slug`);
-      slug = page.id;
+      // 날짜가 있으면 날짜 + 제목 조합, 없으면 제목만 사용
+      if (dateStr) {
+        slug = `${dateStr}-${titleSlug.substring(0, 50)}`; // 최대 50자
+      } else {
+        slug = titleSlug.substring(0, 50);
+      }
+      console.log(`[buildPost] Generated slug from title (English only): ${slug}`);
     }
   } else {
     console.log(`[buildPost] No title found, using UUID as slug`);
   }
   
-  // 최종 slug 검증: 빈 문자열이나 '-'만 있으면 UUID 사용
-  if (!slug || slug.trim() === '' || slug === '-') {
+  // 최종 slug 검증: 빈 문자열, '-', 끝이 '-'로 끝나는 경우 UUID 사용
+  if (!slug || slug.trim() === '' || slug === '-' || slug.endsWith('-') || slug.length < 2) {
     console.warn(`[buildPost] Invalid slug detected (${slug}), forcing UUID`);
     slug = page.id;
-  }
-
-  // 날짜 처리
-  let date = page.created_time;
-  if (props.날짜?.date?.start) {
-    date = props.날짜.date.start;
-  } else if (props.날짜?.date) {
-    date = props.날짜.date;
-  } else if (props.date?.date?.start) {
-    date = props.date.date.start;
   }
 
   // 카테고리 처리
@@ -258,6 +273,7 @@ function savePost(post) {
   // YAML frontmatter 생성 (null 값은 따옴표 없이 null로)
   const frontmatterLines = [
     '---',
+    `id: "${post.id}"`,
     `title: "${post.title.replace(/"/g, '\\"')}"`,
     `slug: "${post.slug}"`,
     `date: "${post.date}"`,
@@ -271,9 +287,60 @@ function savePost(post) {
   ];
 
   const frontmatter = frontmatterLines.join('\n');
-  const filePath = path.join(DATA_DIR, `${post.slug}.md`);
-  fs.writeFileSync(filePath, `${frontmatter}${post.content}`, 'utf8');
-  console.log(`[save] ${filePath}`);
+  const newFilePath = path.join(DATA_DIR, `${post.slug}.md`);
+  
+  // 기존 파일들 중에서 이 포스트와 관련된 파일 확인 및 수정
+  if (fs.existsSync(DATA_DIR)) {
+    const existingFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.md'));
+    
+    for (const fileName of existingFiles) {
+      const filePath = path.join(DATA_DIR, fileName);
+      
+      // 파일명이 새 slug와 같으면 건너뛰기
+      if (fileName === `${post.slug}.md`) {
+        continue;
+      }
+      
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const idMatch = content.match(/^id:\s*["']([^"']+)["']/m);
+        const slugMatch = content.match(/^slug:\s*["']([^"']+)["']/m);
+        const oldSlug = slugMatch ? slugMatch[1] : fileName.replace(/\.md$/, '');
+        
+        // 같은 ID를 가진 파일이 있으면 slug 업데이트
+        if (idMatch && idMatch[1] === post.id) {
+          if (oldSlug !== post.slug) {
+            console.log(`[save] Updating slug for post ${post.id}: ${oldSlug} -> ${post.slug}`);
+            fs.unlinkSync(filePath);
+            console.log(`[save] Removed old file: ${fileName}`);
+          }
+          break;
+        }
+        
+        // ID가 없지만 slug가 잘못된 패턴이고 제목이 같으면 수정
+        // 잘못된 slug 패턴: "4-", "-", "ai-", "-z", 끝이 '-'로 끝나는 경우
+        const isInvalidSlug = !oldSlug || oldSlug.length < 2 || oldSlug === '-' || 
+                              oldSlug.endsWith('-') || oldSlug.startsWith('-');
+        
+        if (isInvalidSlug) {
+          const titleMatch = content.match(/^title:\s*["']([^"']+)["']/m);
+          if (titleMatch && titleMatch[1] === post.title) {
+            console.log(`[save] Found invalid slug "${oldSlug}" for post "${post.title}", will update to "${post.slug}"`);
+            fs.unlinkSync(filePath);
+            console.log(`[save] Removed old file with invalid slug: ${fileName}`);
+            break;
+          }
+        }
+      } catch (err) {
+        // 파일 읽기 실패 시 무시하고 계속 진행
+        console.warn(`[save] Error reading ${fileName}:`, err.message);
+      }
+    }
+  }
+  
+  // 새 파일 저장
+  fs.writeFileSync(newFilePath, `${frontmatter}${post.content}`, 'utf8');
+  console.log(`[save] ${newFilePath}`);
 }
 
 async function main() {
