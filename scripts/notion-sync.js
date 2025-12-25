@@ -60,20 +60,50 @@ async function buildPost(page) {
   const props = page.properties || {};
 
   // Title 속성 찾기 (다양한 형식 지원)
-  // lib/notion.ts와 동일한 로직 사용
+  // Notion 데이터베이스의 제목 속성 이름은 사용자가 설정한 이름일 수 있음
   let title = '제목 없음';
-  if (props.Title?.title?.[0]?.plain_text) {
-    title = props.Title.title[0].plain_text;
-  } else if (props.title?.title?.[0]?.plain_text) {
-    title = props.title.title[0].plain_text;
-  } else {
-    // title 타입 속성 찾기 (모든 속성 중에서 title 타입 찾기)
-    const titleProp = Object.values(props).find((p) => p && p.type === 'title');
-    if (titleProp?.title?.[0]?.plain_text) {
-      title = titleProp.title[0].plain_text;
-    } else {
-      // 디버깅: 어떤 속성들이 있는지 확인
-      console.warn(`[buildPost] Title not found for page ${page.id}. Available properties:`, Object.keys(props));
+  
+  // 방법 1: 먼저 일반적인 이름들 확인
+  const commonTitleNames = ['Title', 'title', '제목', '이름', 'Name', 'name'];
+  for (const name of commonTitleNames) {
+    if (props[name]?.type === 'title' && props[name]?.title?.[0]?.plain_text) {
+      title = props[name].title[0].plain_text;
+      break;
+    }
+  }
+  
+  // 방법 2: title을 찾지 못한 경우, 모든 속성 중에서 type이 'title'인 속성 찾기
+  if (title === '제목 없음') {
+    const titleProp = Object.values(props).find((p) => {
+      if (!p || typeof p !== 'object') return false;
+      return p.type === 'title';
+    });
+    
+    if (titleProp?.title && Array.isArray(titleProp.title) && titleProp.title.length > 0) {
+      const titleText = titleProp.title[0]?.plain_text;
+      if (titleText) {
+        title = titleText;
+      }
+    }
+  }
+  
+  // 방법 3: 여전히 찾지 못한 경우 디버깅 정보 출력
+  if (title === '제목 없음') {
+    const propInfo = Object.entries(props).map(([name, prop]) => ({
+      name,
+      type: prop?.type,
+      hasTitle: prop?.type === 'title' ? (prop.title?.[0]?.plain_text || 'empty') : 'not title type'
+    }));
+    console.warn(`[buildPost] Title not found for page ${page.id}`);
+    console.warn(`[buildPost] Property info:`, JSON.stringify(propInfo, null, 2));
+    
+    // 방법 4: 페이지 객체 자체에 title이 있는지 확인
+    if (page.title) {
+      if (typeof page.title === 'string') {
+        title = page.title;
+      } else if (Array.isArray(page.title) && page.title.length > 0) {
+        title = page.title[0]?.plain_text || '제목 없음';
+      }
     }
   }
 
