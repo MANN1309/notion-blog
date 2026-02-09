@@ -41,11 +41,12 @@ export async function GET() {
     urlEntries.push(`<url><loc>${escapeXml(url)}</loc><lastmod>${lastmod}</lastmod></url>`)
   }
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urlEntries.join('\n')}
-</urlset>
-`
+  // 전체를 한 줄로 출력 → 중간에 줄바꿈이 삽입되어 <loc>가 쪼개지는 현상 방지
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    urlEntries.join('') +
+    '</urlset>'
 
   return new NextResponse(xml, {
     headers: {
