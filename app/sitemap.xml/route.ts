@@ -11,25 +11,31 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, '&apos;')
 }
 
+/** <loc> 내부 줄바꿈 제거 — 크롤링 오류 방지 */
+function toSingleLineUrl(url: string): string {
+  return url.replace(/\s+/g, '').trim()
+}
+
 export async function GET() {
-  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://woosm-blog.vercel.app').replace(/\s+/g, '')
+  const baseUrl = toSingleLineUrl(process.env.NEXT_PUBLIC_SITE_URL || 'https://woosm-blog.vercel.app')
   const posts = await getPosts()
   const now = Date.now()
 
   const urlEntries: string[] = []
 
-  // 홈
+  // 홈 — <loc> 한 줄로 출력
   urlEntries.push(
     `<url><loc>${escapeXml(baseUrl)}</loc><lastmod>${new Date(now).toISOString()}</lastmod></url>`
   )
 
-  // 포스트 (loc 한 줄, lastmod 현재 시점 이하)
+  // 포스트 — loc 한 줄, lastmod 현재 시점 이하
   for (const post of posts) {
-    const encodedSlug = post.slug
+    const slugNoSpaces = toSingleLineUrl(post.slug)
+    const encodedSlug = slugNoSpaces
       .split('/')
-      .map((seg) => encodeURIComponent(seg))
+      .map((seg) => encodeURIComponent(seg.trim()))
       .join('/')
-    const url = `${baseUrl}/posts/${encodedSlug}`.replace(/\s+/g, '')
+    const url = toSingleLineUrl(`${baseUrl}/posts/${encodedSlug}`)
     const postTime = new Date(post.date).getTime()
     const lastmod = new Date(Math.min(postTime, now)).toISOString()
     urlEntries.push(`<url><loc>${escapeXml(url)}</loc><lastmod>${lastmod}</lastmod></url>`)
