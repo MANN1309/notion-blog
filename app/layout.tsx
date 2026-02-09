@@ -14,7 +14,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://woosm-blog.vercel.app'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: "notion-blog",
   description: "Notion에서 관리하는 블로그",
 };
