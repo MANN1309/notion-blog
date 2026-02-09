@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getPosts } from '@/lib/posts'
 
+// 빌드 시 정적으로 고정되지 않고, 요청 시마다 최신 코드로 생성되도록 함
+export const dynamic = 'force-dynamic'
+
 /** Google Search Console 지침: <loc> 한 줄, lastmod만, priority/changefreq 없음 */
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -51,7 +54,8 @@ export async function GET() {
   return new NextResponse(xml, {
     headers: {
       'Content-Type': 'application/xml',
-      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      // 배포 후 바로 새 sitemap이 보이도록 캐시 최소화 (확인 후 필요 시 max-age 늘려도 됨)
+      'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=300',
     },
   })
 }
